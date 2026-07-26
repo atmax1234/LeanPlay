@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.vs/
+TestResults/
+artifacts/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.user
+*.suo
+recovery-journal.json
+recovery-journal.json.*.tmp

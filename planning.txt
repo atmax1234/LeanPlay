@@ -1,0 +1,1038 @@
+# LeanPlay Product Strategy
+
+## Status
+
+This document defines the locked product direction for LeanPlay. It combines the
+original evidence-first strategy with the reviewed symptom-guided workflow,
+verified-observation model, transparent confidence and coverage, interactive
+timeline, before/after comparison, and progressive Developer Mode.
+
+The existing read-only analyzer remains the technical foundation. The execution
+plan at the end of this document is the agreed build order for reaching the
+finished product.
+
+## Product Goal
+
+LeanPlay should explain why a Windows machine or game performs poorly, show the
+evidence in language that non-technical users can understand, and only then
+offer specific, reversible actions.
+
+The product flow is:
+
+1. Inventory the machine.
+2. Measure it under the relevant workload.
+3. Convert the evidence into explainable health assessments.
+4. Offer bounded, reversible optimizations tied to individual findings.
+5. Measure again to determine whether each change actually helped.
+
+LeanPlay must not become a generic debloater or promise fake performance gains.
+
+## Core Principles
+
+- Evidence before optimization.
+- Never treat the mere presence of a Windows feature as proof of a problem.
+- Clearly separate measured problems, historical warnings, configuration
+  inventory, healthy results, and unavailable measurements.
+- Never silently score unavailable evidence as healthy.
+- Explain every deduction in plain language and expose the underlying evidence.
+- Prefer temporary comparison runs over permanent changes.
+- Capture the exact original state immediately before every change.
+- Make every supported change previewable, logged, reversible, and recoverable
+  after a crash or interrupted session.
+- Change one variable at a time and measure the same workload again.
+- Do not read game memory, inject code, hook graphics APIs, manipulate
+  anti-cheat components, or require a custom kernel driver for the initial
+  product.
+
+## Stage 1 – System Inventory
+
+Build a reproducible snapshot of the machine and the Windows components that
+can influence performance.
+
+### Hardware and platform
+
+- CPU, topology, logical processors, and supported power-management features
+- GPU and active display adapters
+- Physical memory and module configuration
+- Storage devices, controllers, interfaces, volumes, and available capacity
+- Network adapters, negotiated link speed, and active routes
+- Motherboard, BIOS/UEFI version, BIOS date, and system firmware versions
+- Device status and Device Manager problem codes
+
+Firmware and driver versions should be reported as facts. They must not be
+called outdated unless LeanPlay has a reliable, hardware-specific source for
+that conclusion.
+
+### Windows and security
+
+- Windows edition, build, servicing state, and pending reboot
+- Installed and active Windows optional features
+- Hyper-V and related virtualization components
+- VBS, HVCI/Memory Integrity, and other active security isolation features
+- Defender components, including real-time and network inspection status
+- Game Mode, HAGS, power plan, and relevant power-policy values
+
+These are configuration facts, not automatic deductions. For example, VBS being
+enabled is informational until a controlled measurement shows meaningful impact
+for the tested workload.
+
+### Drivers, filters, and background components
+
+- Relevant kernel and device drivers
+- NDIS adapter bindings and third-party network filters
+- WFP providers, callouts, and filter-chain inventory where supported
+- Filesystem minifilters
+- VPN, traffic-shaping, capture, overlay, and security filters
+- Running services and service start modes
+- Scheduled tasks relevant to updates, maintenance, telemetry, and background
+  synchronization
+- Active processes, launchers, overlays, capture tools, update clients, and
+  synchronization software
+
+Advanced adapter and filter properties are factual capability inventory.
+Driver-specific fields such as MSI/MSI-X state, RSS queues, interrupt
+affinities, offloads, and vendor-specific advanced properties will not exist or
+mean the same thing on every system. LeanPlay must report support and raw values
+before attempting interpretation.
+
+## Symptom-Guided Diagnostic Session
+
+Before a trace starts, LeanPlay should ask the user what is wrong:
+
+- FPS drops
+- Stuttering
+- High ping
+- Packet loss
+- Slow Windows
+- Audio crackle
+- Mouse or input delay
+- Random freezes
+- Slow boot
+- Storage feels slow
+- Games crash
+- Other
+- Not sure
+
+Symptoms are multi-select because related problems can occur together. “Not
+sure” is exclusive.
+
+The intake should also ask:
+
+- when the problem occurs: idle, boot, gaming, or continuously;
+- which game or application is involved;
+- whether the user can reproduce it now;
+- whether networking is wired or wireless;
+- whether the problem starts immediately or develops over time;
+- whether it began after a Windows, driver, BIOS, software, or hardware change.
+
+LeanPlay should always collect a lightweight cross-system baseline so a symptom
+profile cannot hide an unexpected cross-domain cause. It should then activate
+additional scenario-specific collectors.
+
+For example, “High ping” should prioritize:
+
+- NDIS bindings and filter inventory;
+- WFP providers, callouts, and relevant filters;
+- adapter power and advanced properties;
+- socket and ephemeral-port state;
+- DNS timing;
+- MTU and active routes;
+- gateway, external-reference, and optional user-supplied target quality;
+- interrupt moderation and RSS state where supported;
+- network ETW and adapter link events.
+
+Static inventory that is expensive but rarely changes may be cached with a
+timestamp and refreshed when relevant hardware, drivers, Windows build, or
+collector versions change.
+
+## Stage 2 – Runtime Analysis
+
+Measure the system during the exact slowdown, stutter, or latency problem.
+Inventory alone must never be presented as proof of runtime interference.
+
+### Kernel and scheduling
+
+- ISR and DPC counts, execution time, and responsible driver attribution
+- CPU utilization, privileged time, and runnable queue pressure
+- Per-process CPU activity and process creation during the trace
+- CPU scheduling behavior and context-switch activity where reliable
+- Core parking configuration and observed parked-core state
+- Timer-resolution requests and changes during the trace
+- Power-state and frequency evidence where Windows exposes it reliably
+
+### Memory, storage, and GPU
+
+- Available memory, commit pressure, hard-fault activity, and process memory
+- Disk utilization, queueing, latency, throughput, and per-process attribution
+- GPU engine utilization, memory use, temperature, and power when supported
+- GPU runtime errors, display-driver resets, and relevant reliability events
+- Frame-time data only through safe external mechanisms that do not hook or
+  inject into the game
+
+### Networking
+
+- Default-gateway and external-reference latency
+- Packet loss and jitter
+- TCP retransmissions
+- Per-process network activity
+- Active TCP connections and UDP endpoint ownership
+- ETW network events and relevant TCP/IP warnings
+- NDIS and adapter link events
+- WFP filter-chain context
+- DNS, cloud synchronization, browser, launcher, update, and delivery-
+  optimization activity where it can be measured reliably
+
+LeanPlay must distinguish local-machine interference, LAN/link problems,
+internet-route behavior, and game-server behavior. ICMP results must not be
+described as identical to the game’s UDP traffic.
+
+### Correlation
+
+The analyzer should correlate timestamped resource and reliability events with
+the measured symptom when the evidence supports it.
+
+Example:
+
+> At 21:42:16 latency increased from 18 ms to 47 ms while a background process
+> consumed 18% CPU and generated 1.2 GB of disk reads.
+
+Correlation must not be presented as causation. The report should state the
+strength and limitations of the relationship.
+
+### Interactive evidence timeline
+
+The event timeline should become a signature analysis surface. It should align
+metrics and events on one clock and allow the user to:
+
+- toggle CPU, disk, memory, GPU, ping, DPC/ISR, and network series;
+- click a spike to inspect nearby processes, drivers, sockets, services, and
+  events;
+- filter by process, driver, provider, health domain, or finding;
+- zoom and select a time window;
+- jump from a finding directly to its raw timestamp and evidence;
+- compare the state before, during, and after the reported symptom;
+- distinguish live-trace events from historical event-log records;
+- see clock precision, sampling interval, collector gaps, and dropped ETW-event
+  counts.
+
+An ordered sequence such as “CPU spike, socket opened, DPC spike, ping spike”
+is useful evidence, but order alone does not prove that the first event caused
+the last. The UI and finding engine must preserve that distinction.
+
+## Stage 3 – Explainable Health Assessment
+
+The beginning of every report should provide a brief, non-technical summary.
+The existing detailed analyzer report remains below it as the technical evidence
+section.
+
+### Example summary
+
+> Your hardware is performing normally at idle, but network reliability needs
+> attention.
+>
+> Networking: Needs attention — 62/100
+>
+> Memory: Healthy — 98/100
+>
+> CPU runtime: Healthy at idle — 94/100
+>
+> Storage: Not fully measured
+>
+> Kernel/driver latency: Requires an elevated workload trace
+
+The summary should immediately answer:
+
+- What appears healthy?
+- What needs attention?
+- What was not measured?
+- What is the most important finding?
+- What should the user do next?
+
+### Health domains
+
+Initial domains should include:
+
+- Networking
+- Storage
+- Kernel and driver latency
+- CPU scheduling/runtime
+- Memory pressure
+- GPU runtime
+- Windows/background interference
+- System reliability
+
+Domains may be added or combined when measurement coverage justifies it.
+
+### Assessment states
+
+Every domain must expose a state as well as any numeric score:
+
+- **Healthy:** sufficient evidence showed normal behavior during the trace.
+- **Needs attention:** measured or historical evidence crossed a defined
+  threshold.
+- **Critical evidence:** strong evidence can directly explain severe disruption
+  or instability.
+- **Informational:** relevant configuration or activity exists without proof of
+  harm.
+- **Not measured:** required evidence was unavailable because of permissions,
+  unsupported hardware, missing providers, or trace conditions.
+- **Not reproduced:** the subsystem was measured, but the reported symptom did
+  not occur during the trace.
+
+“Not measured” and “Not reproduced” must never be converted into a perfect
+score.
+
+### Verified observations and separate diagnostic axes
+
+“Verified” is an evidence status, not a replacement for impact severity.
+LeanPlay must keep the following dimensions separate:
+
+1. **Evidence status:** Was the observation directly measured, derived from
+   measured evidence, still a hypothesis, or not measured?
+2. **Impact severity:** If real and relevant, is it critical, warning-level,
+   informational, or a healthy result?
+3. **Symptom relevance:** How well could it explain the symptom selected by the
+   user: high, medium, low, or none?
+4. **Time scope:** Did it occur during this trace, in recent event history, or
+   only as static inventory?
+5. **Reproduction state:** Did the selected symptom actually occur during the
+   measurement window?
+
+Initial evidence statuses should be:
+
+- **Verified observation:** direct raw evidence proves the narrowly worded
+  observation occurred.
+- **Derived observation:** a deterministic calculation over verified inputs
+  crossed a documented threshold.
+- **Hypothesis:** evidence suggests a possible explanation but does not prove
+  the observation or causal relationship.
+- **Not measured:** the required collector or evidence was unavailable.
+
+Examples:
+
+```text
+VERIFIED OBSERVATION
+Windows logged TCP/IP Event 4266 twice during the previous seven days.
+
+Impact:
+Critical when occurring.
+
+Relevance to high ping or disconnects:
+High.
+
+Relevance to low FPS:
+Low.
+```
+
+```text
+VERIFIED OBSERVATION
+GPU utilization never exceeded 3% during this idle trace.
+
+Impact:
+Healthy for the observed idle condition.
+
+Diagnostic meaning:
+This does not establish available GPU headroom during a game.
+```
+
+Claims must remain narrower than their evidence. For example, a driver event
+whose message says the link disconnected verifies that the disconnect event was
+logged. It does not by itself prove the complete physical renegotiation sequence
+or the cause of that sequence.
+
+### Confidence, coverage, and diagnostic relevance
+
+Confidence must be a first-class, explainable part of every domain and finding,
+but one uncalibrated percentage must not combine unrelated concepts.
+
+LeanPlay should report:
+
+- **Evidence confidence:** how trustworthy and complete the observation is;
+- **Measurement coverage:** which expected collectors and evidence sources were
+  available, unavailable, unsupported, or intentionally skipped;
+- **Diagnostic relevance:** how well the observation could explain the
+  user-selected symptom;
+- **Reproduction confidence:** whether the symptom and workload were actually
+  present in the trace.
+
+Initial confidence and relevance values should be **High**, **Medium**, or
+**Low** with a visible explanation. Numeric probabilities may be introduced
+only after calibration against a sufficiently large labeled trace set.
+
+Example:
+
+```text
+Networking — Needs attention
+
+Evidence confidence:
+High
+
+Diagnostic relevance to high ping:
+High
+
+Measured:
+✓ Gateway latency
+✓ External-reference latency
+✓ Packet loss and jitter
+✓ TCP/IP reliability events
+✓ UDP endpoint ownership
+✓ Adapter link events
+
+Unavailable:
+✗ Elevated network ETW
+✗ Game-server route
+✗ Router telemetry
+```
+
+Coverage should be computed from the evidence sources required for the selected
+symptom and domain. Missing evidence must remain visible in the HTML and JSON.
+
+### Diagnosis language
+
+Until LeanPlay has a statistically trained and validated model, it must not use
+phrases such as “87% probability this caused the issue.”
+
+Use bounded diagnostic language:
+
+> Three conditions could explain the reported high-ping symptom. Overall
+> diagnostic relevance is high.
+
+Then show supporting and limiting evidence:
+
+```text
+Supports this diagnosis:
+✓ UDP port exhaustion occurred
+✓ Ethernet link-disconnect events occurred
+
+Limits this diagnosis:
+✓ No packet loss occurred during this trace
+✓ Public-reference latency remained stable
+✗ The reported symptom was not reproduced
+```
+
+### Scoring rules
+
+Numeric scores are optional presentation aids, not independent diagnoses.
+They must avoid false precision.
+
+Every deduction must include:
+
+- the finding that caused it;
+- the number of points deducted;
+- the raw evidence and timestamps;
+- whether the evidence was measured during this trace or found in history;
+- confidence;
+- the threshold or rule that was crossed;
+- measurement limitations;
+- one bounded next action.
+
+Example:
+
+```text
+Networking: 65/100
+
+-25  UDP ephemeral-port exhaustion detected
+-10  Six Ethernet link-disconnect events
+  0  Third-party NDIS filter present — inventory only
+  0  No packet loss during this trace
+
+Evidence confidence:
+High for historical reliability.
+
+Diagnostic relevance:
+Medium for current gameplay performance because the symptom was not reproduced.
+```
+
+The presence of an NDIS filter, VBS, Hyper-V, Defender, a power plan, or any
+other feature should not cause a large deduction without measured evidence.
+Inventory-only observations should normally remain informational.
+
+Scores and thresholds must be:
+
+- deterministic;
+- versioned;
+- covered by tests;
+- stable enough for before/after comparisons;
+- inspectable in the JSON output;
+- calibrated against known healthy and deliberately stressed traces.
+
+## Stage 4 – Evidence-Linked Optimizer
+
+Optimization becomes available only after LeanPlay has a specific finding.
+
+Every recommendation must be tied to that finding and show:
+
+- the exact target and proposed change;
+- the evidence that justifies it;
+- the expected measurable effect;
+- risk and possible side effects;
+- whether elevation or a restart is required;
+- whether the change is temporary or persistent;
+- the captured original value;
+- the exact undo operation;
+- what metric will determine whether it helped.
+
+### Example action
+
+```text
+Disable Energy Efficient Ethernet for one comparison run
+
+Finding:
+Repeated Intel I226-V link disconnects
+
+Expected effect:
+May prevent physical-link renegotiation.
+
+Risk:
+Slightly higher idle power consumption.
+
+Scope:
+Intel I226-V only.
+
+Restart required:
+No.
+
+Undo:
+Restore the captured adapter value.
+
+[Preview change] [Apply temporarily] [Undo]
+```
+
+### Optimizer safety rules
+
+- No action without a linked finding.
+- Do not provide a one-click “apply everything” mode.
+- Show the exact diff before applying.
+- Require explicit user approval for each recommendation or reviewed group.
+- Use documented Windows APIs and supported configuration surfaces.
+- Maintain a durable write-ahead snapshot and action journal.
+- Restore after normal exit, game crash, service restart, application crash, or
+  explicit emergency recovery.
+- Treat access denied and protected-component failures as reportable outcomes,
+  not reasons for unsafe escalation.
+- Never terminate unknown, essential, anti-cheat, or protected processes.
+- Never disable VBS, Hyper-V, Defender, filters, services, or scheduled tasks
+  merely because they are present.
+- Prefer “apply temporarily for this comparison” as the default action.
+
+### Proving an optimization
+
+After applying one recommendation, LeanPlay should rerun the same workload and
+compare the metric associated with the finding.
+
+The comparison should show:
+
+- baseline value;
+- optimized value;
+- absolute and percentage change;
+- trace and workload comparability;
+- confidence;
+- whether the result improved, regressed, or was inconclusive.
+
+If the result does not improve, LeanPlay should recommend undoing the change.
+
+Before/after comparison should be one of LeanPlay’s defining features. Scores
+are summaries; raw measurements and their deltas must appear first.
+
+The comparison engine must gate conclusions on session comparability:
+
+- same selected symptom and workload label;
+- same game, application, map, benchmark, or user-described scenario where
+  possible;
+- similar trace duration, sampling interval, and enabled collectors;
+- similar warm-up, thermal, power, and foreground/background conditions;
+- no unexplained collector failures or materially different missing evidence;
+- sufficient observation time for intermittent events;
+- multiple repetitions for metrics with high natural variance.
+
+Supported outcomes are:
+
+- **Measured improvement — keep change**
+- **Measured regression — undo recommended**
+- **No meaningful difference — undo recommended**
+- **Inconclusive — repeat comparison**
+
+Example:
+
+```text
+Baseline
+Network score: 65
+Median latency: 17.4 ms
+P95 latency: 24.8 ms
+Link disconnects during trace: 1
+
+Temporary experiment
+Energy Efficient Ethernet disabled on Intel I226-V
+
+Comparison
+Network score: 89
+Median latency: 12.8 ms
+P95 latency: 15.1 ms
+Link disconnects during trace: 0
+
+Result
+Measured improvement across comparable runs.
+[Keep change] [Undo]
+```
+
+A zero event count in a short comparison is not automatically proof that an
+intermittent fault is fixed. LeanPlay must state when the observation window is
+too short for a strong conclusion.
+
+## Report Structure
+
+The report should use progressive disclosure:
+
+1. Plain-language health overview
+2. Most important finding and next action
+3. Domain scorecards with deductions and confidence
+4. Recommended evidence-linked experiments
+5. Before/after comparison results, when available
+6. Technical charts and timelines
+7. Processes, drivers, filters, services, tasks, and event evidence
+8. Complete machine inventory
+9. Collector notices, unavailable evidence, and methodology
+10. Matching machine-readable JSON
+
+The first screen should be understandable without Windows internals knowledge.
+Nothing in the brief summary should hide or contradict the detailed evidence.
+
+### Progressive Developer Mode
+
+Developer Mode is progressive disclosure over the same evidence model, not a
+separate analyzer with different conclusions.
+
+- **Overview:** plain-language diagnosis, domain state, most important evidence,
+  and next action.
+- **Evidence:** deductions, confidence, coverage, limitations, interactive
+  timeline, and comparison results.
+- **Developer Mode:** raw ETW events and statistics, WFP providers/callouts/
+  filters, NDIS bindings, registry-backed values, driver versions, Event IDs,
+  power settings, MSI/MSI-X capability, RSS queues, interrupt affinities,
+  offloads, TCP globals, socket statistics, and collector diagnostics.
+
+Unsupported or driver-specific advanced values must say “unsupported” or “not
+exposed,” not zero or healthy. Developer exports should preserve provenance and
+timestamps while providing a privacy review before sharing potentially
+sensitive process names, paths, addresses, routes, or filter data.
+
+## Current Foundation
+
+LeanPlay already has a read-only Windows analyzer that can produce HTML and JSON
+reports containing:
+
+- hardware, Windows, driver, service, process, and reliability inventory;
+- timed CPU, memory, GPU, disk, network, and process samples;
+- gateway and public-reference latency, jitter, and loss;
+- TCP retransmission and per-process TCP/UDP endpoint evidence;
+- optional elevated kernel ETW disk, network, DPC, ISR, and driver attribution;
+- evidence-ranked findings and permission-aware fallbacks.
+
+This analyzer should be extended rather than replaced. The new plain-language
+health overview should be appended at the beginning, while the existing
+technical report remains available beneath it.
+
+## Execution Plan
+
+The phases below are the build order for the finished LeanPlay product. Each
+phase must leave the existing analyzer runnable and must pass its exit criteria
+before mutation capabilities expand.
+
+### Phase 0 – Preserve the working baseline
+
+#### Deliverables
+
+- Record the current analyzer, service, HTML, JSON, schema, and test behavior as
+  the compatibility baseline.
+- Add representative golden report fixtures for:
+  - healthy idle trace;
+  - UDP port exhaustion history;
+  - Ethernet link-disconnect history;
+  - CPU saturation;
+  - memory pressure;
+  - packet loss and jitter;
+  - unavailable PDH and ETW collectors.
+- Define explicit schema-version and scoring-version fields.
+- Preserve stable finding IDs so old reports and future comparisons remain
+  interpretable.
+- Document current collector privilege requirements and fallbacks.
+
+#### Exit criteria
+
+- Existing release build remains warning-free.
+- Existing tests and new golden-fixture tests pass.
+- The current one-click analyzer still runs and exports valid HTML and JSON.
+- No current finding silently changes meaning without a documented migration.
+
+### Phase 1 – Build the unified evidence contract
+
+#### Deliverables
+
+- Introduce typed models for:
+  - evidence status;
+  - impact severity;
+  - symptom relevance;
+  - evidence confidence;
+  - time scope;
+  - reproduction state;
+  - evidence references;
+  - coverage items and unavailable reasons.
+- Require every observation to have a stable ID, narrowly worded claim,
+  timestamp or time scope, source, raw evidence reference, and collector
+  version.
+- Convert existing findings into the new model without discarding their raw
+  evidence, recommendation, or current severity.
+- Add deterministic rules for when a finding may be labeled **Verified
+  observation** or **Derived observation**.
+- Add validation that prevents causal wording when only correlation or
+  historical co-occurrence is available.
+- Serialize the complete evidence and coverage model into versioned JSON.
+
+#### Exit criteria
+
+- The same observation can be rendered differently for different symptoms
+  without changing the underlying fact.
+- A verified healthy idle GPU observation cannot be mistaken for verified
+  gaming headroom.
+- Historical events cannot be presented as if they occurred during the trace.
+- Unit tests cover every evidence status and axis combination.
+
+### Phase 2 – Add symptom-guided session orchestration
+
+#### Deliverables
+
+- Add the multi-select symptom model and exclusive “Not sure” state.
+- Add the supporting intake questions defined in this strategy.
+- Store the selected symptoms, workload, environment, and expected reproduction
+  window in the report and database.
+- Define a mandatory lightweight baseline collector set.
+- Define versioned targeted collector profiles for:
+  - FPS drops and stuttering;
+  - high ping and packet loss;
+  - audio crackle and input delay;
+  - random freezes and crashes;
+  - slow boot;
+  - slow storage;
+  - general Windows slowdown;
+  - unknown symptoms.
+- Add a visible “problem happened now” marker and optional hotkey so a user can
+  timestamp the symptom during a trace.
+- Estimate and display the trace duration, privilege requirement, and expected
+  overhead before starting.
+- Record which profile enabled each collector.
+
+#### Exit criteria
+
+- Every session contains a core baseline plus the correct targeted collectors.
+- Selecting a network symptom cannot suppress CPU, memory, storage, and process
+  sentinel measurements.
+- “Not sure” produces a safe broad profile with a visible overhead warning.
+- Profiles are deterministic, versioned, and covered by tests.
+
+### Phase 3 – Deliver the plain-language health overview
+
+#### Deliverables
+
+- Implement the initial health domains:
+  - Networking;
+  - Storage;
+  - Kernel and driver latency;
+  - CPU scheduling/runtime;
+  - Memory pressure;
+  - GPU runtime;
+  - Windows/background interference;
+  - System reliability.
+- Build a versioned deduction engine with stable rules and explicit thresholds.
+- Keep inventory-only facts at zero deduction unless a separately measured rule
+  establishes harm.
+- Compute coverage from the collectors required by the selected symptom and
+  domain.
+- Generate evidence confidence, diagnostic relevance, and reproduction state
+  separately.
+- Replace “Critical evidence found” at the top of the report with a
+  plain-language diagnosis summary.
+- Show the most important observation, what appears healthy, what needs
+  attention, what was not measured, whether the symptom was reproduced, and
+  what to do next.
+- Make every score expandable into its deductions, raw evidence, thresholds,
+  limitations, and missing measurements.
+
+#### Exit criteria
+
+- A non-technical user can understand the first screen without reading Windows
+  internals.
+- “Not measured” and “Not reproduced” never render as healthy or 100/100.
+- Scores reproduce exactly from the JSON evidence and scoring version.
+- No numeric causal probability is shown.
+- The existing detailed report remains intact beneath the overview.
+
+### Phase 4 – Complete inventory and targeted runtime coverage
+
+#### Inventory deliverables
+
+- Add supported inventory for:
+  - Windows optional features, Hyper-V, VBS, HVCI, and Defender components;
+  - BIOS/UEFI and available firmware identifiers;
+  - scheduled tasks relevant to the selected symptom;
+  - filesystem minifilters;
+  - NDIS bindings and third-party filters;
+  - WFP providers, callouts, sublayers, and relevant filter snapshots;
+  - adapter power and advanced properties;
+  - RSS capability and queue state;
+  - MSI/MSI-X capability and exposed hardware properties;
+  - TCP globals, offloads, routes, interface metrics, and MTU;
+  - driver-specific unsupported and unavailable states.
+
+#### Runtime deliverables
+
+- Extend ETW and native collection for:
+  - scheduler and context-switch evidence;
+  - process creation and wake activity;
+  - timer-resolution events and requesting processes where support permits;
+  - observed core-parking state;
+  - DNS timing;
+  - network connect/send/receive/drop context;
+  - adapter link transitions;
+  - DPC/ISR execution and driver attribution;
+  - exact process disk and network totals;
+  - service, update, Defender, and synchronization activity relevant to the
+    selected symptom.
+- Add trace-health metrics: lost ETW events, buffer utilization, clock source,
+  sampling gaps, counter availability, and collector overhead.
+- Add safe external frame-time ingestion only when it does not require game
+  injection, graphics hooking, memory reads, or anti-cheat manipulation.
+
+#### Exit criteria
+
+- Every requested measurement is either present or explicitly marked
+  unavailable with a reason.
+- Unsupported adapter and driver fields never appear as zero.
+- High-volume ETW traces expose event-loss information and remain within a
+  defined overhead budget.
+- Standard-user mode degrades cleanly; elevation adds evidence without changing
+  the meaning of standard-user measurements.
+- Collection does not interact with game or anti-cheat processes.
+
+### Phase 5 – Build the interactive evidence timeline and Developer Mode
+
+#### Deliverables
+
+- Normalize trace samples, ETW records, event-log history, symptom markers, and
+  optimizer actions onto an explicit time model.
+- Add an interactive timeline to the self-contained report.
+- Support series toggling, zoom, range selection, finding-to-time navigation,
+  process/driver/provider filters, and nearby-event inspection.
+- Clearly style live-trace, historical, inventory, derived, and missing data.
+- Add correlation windows without automatically assigning causality.
+- Add Overview, Evidence, and Developer Mode disclosure levels.
+- Expose raw collector diagnostics and advanced Windows inventory in Developer
+  Mode.
+- Add privacy review and redaction options before exporting process paths,
+  addresses, routes, filters, or other sensitive evidence.
+
+#### Exit criteria
+
+- Clicking any timeline-backed finding reaches its raw evidence.
+- The report stays usable with large traces and degrades gracefully when
+  JavaScript is unavailable.
+- Event ordering never becomes an unsupported causal statement.
+- Exported HTML remains self-contained and the JSON contains equivalent raw
+  data.
+
+### Phase 6 – Implement baseline and comparison sessions
+
+#### Deliverables
+
+- Extend SQLite for session groups, baseline/comparison roles, symptom profiles,
+  trace configurations, collector coverage, environment fingerprints, actions,
+  and metric deltas.
+- Allow any compatible read-only session to become a baseline.
+- Build the comparability gate defined in this strategy.
+- Compare raw metrics before domain scores.
+- Show absolute change, percentage change, distribution changes, relevant
+  percentiles, event-count differences, and confidence limitations.
+- Support repeated runs and flag naturally noisy or under-observed results.
+- Implement the four comparison outcomes:
+  - measured improvement;
+  - measured regression;
+  - no meaningful difference;
+  - inconclusive.
+- Allow comparison of drivers, power plans, Game Mode, HAGS, NIC settings, and
+  other user-controlled experiments even before LeanPlay can apply those
+  changes itself.
+
+#### Exit criteria
+
+- Incompatible traces cannot produce a “keep change” conclusion.
+- A score improvement cannot hide a regression in the metric tied to the
+  finding.
+- Repeating the same fixture produces the same comparison result.
+- Baseline and comparison evidence remain independently inspectable.
+
+### Phase 7 – Build the recommendation catalog and safe optimizer
+
+#### Deliverables
+
+- Define a versioned, allowlisted recommendation catalog.
+- Require every recommendation to declare:
+  - linked finding and required evidence;
+  - supported hardware/Windows preconditions;
+  - exact target and desired value;
+  - expected measurable effect;
+  - risk and side effects;
+  - elevation and reboot requirements;
+  - temporary or persistent scope;
+  - snapshot and undo handlers;
+  - comparison metrics and minimum observation window.
+- Reuse and extend the existing privileged service, durable snapshot, write-
+  ahead journal, state machine, and recovery path.
+- Implement previewable diffs and explicit per-action approval.
+- Default to temporary experiments.
+- Begin with a small, testable set:
+  - approved background application handling;
+  - approved non-critical service handling;
+  - temporary power-plan switching;
+  - selected adapter properties such as Energy Efficient Ethernet only when the
+    exact property is supported and linked evidence exists.
+- Keep security-sensitive, reboot-heavy, or weakly supported changes such as
+  disabling VBS, Hyper-V, Defender, HAGS, arbitrary filters, and undocumented
+  registry tweaks out of the initial optimizer catalog.
+- Automatically offer undo when comparison shows regression, no meaningful
+  improvement, or an inconclusive result.
+
+#### Exit criteria
+
+- There is no “apply everything” path.
+- No change can execute without a linked finding, captured original state, and
+  known undo.
+- Normal exit, game crash, UI crash, service restart, forced process exit, and
+  interrupted application all preserve or restore recoverable state.
+- Access-denied and partial failures are safely journaled and reported.
+- Destructive fault-injection tests prove idempotent rollback.
+
+### Phase 8 – Build the finished desktop product
+
+#### Deliverables
+
+- Add a .NET Windows desktop UI using the existing C# models and service
+  contracts.
+- Provide:
+  - Home and machine status;
+  - symptom intake;
+  - trace setup and progress;
+  - live symptom marker;
+  - diagnosis overview;
+  - domain evidence;
+  - interactive timeline;
+  - baseline/comparison workflow;
+  - recommendation preview, apply, keep, and undo;
+  - Developer Mode;
+  - recovery status;
+  - HTML/JSON export and privacy review.
+- Keep the UI standard-user by default and route only required operations
+  through authenticated, validated privileged-service IPC.
+- Validate all renderer/UI-to-service inputs, object identifiers, paths, action
+  IDs, and expected snapshot versions.
+- Keep the standalone command-line analyzer available for scripting, support,
+  recovery, and headless collection.
+- Provide an installer, explicit uninstall, emergency recovery entry point, and
+  clean upgrade behavior for database and journal versions.
+
+#### Exit criteria
+
+- A non-technical user can complete symptom selection, trace, diagnosis, one
+  controlled experiment, comparison, and undo without using a terminal.
+- Cancelled UAC or unavailable elevation still yields a useful report.
+- The UI cannot request arbitrary services, registry paths, commands, files, or
+  unregistered optimizer actions.
+- Uninstall either restores active state or refuses with a clear recovery path.
+
+### Phase 9 – Calibrate, validate, and harden
+
+#### Deliverables
+
+- Build deterministic synthetic fixtures for every threshold and finding.
+- Collect consented real traces covering healthy, stressed, and known-fault
+  systems.
+- Calibrate scores and deductions without hiding uncertainty.
+- Test representative:
+  - Windows 10 and Windows 11 builds;
+  - administrator and standard-user sessions;
+  - Intel and AMD CPUs;
+  - NVIDIA, AMD, and integrated GPUs;
+  - wired and wireless adapters;
+  - supported Intel, Realtek, and other common NICs;
+  - Hyper-V/VBS enabled and disabled environments;
+  - systems with VPN, capture, firewall, and security filters;
+  - missing counters, blocked ICMP, offline operation, and event-log access
+    failures.
+- Measure analyzer overhead at idle and during CPU-, GPU-, disk-, network-, and
+  latency-sensitive workloads.
+- Test CS2 and Valorant compatibility without reading, injecting, hooking,
+  suspending, or modifying their game and anti-cheat processes.
+- Fuzz and fault-test report parsing, IPC, database migration, journal recovery,
+  action idempotency, and malformed Windows provider data.
+- Perform package vulnerability, static-analysis, and dependency-license
+  reviews.
+
+#### Exit criteria
+
+- Published overhead budgets are met or the UI clearly warns when a selected
+  profile is heavier.
+- Score rules have fixtures, versioning, documented rationale, and known
+  limitations.
+- No supported action can leave an unrecoverable state in the tested crash
+  matrix.
+- No unresolved high-severity security or data-loss issue remains.
+- Anti-cheat testing finds no prohibited interaction.
+
+### Phase 10 – Release the finished version
+
+#### Deliverables
+
+- Produce signed release binaries and installer when a signing identity is
+  available.
+- Publish user documentation, methodology, privacy behavior, supported actions,
+  limitations, and emergency recovery steps.
+- Include machine-readable schema documentation and a report-version migration
+  policy.
+- Add explicit diagnostic-bundle export with privacy preview.
+- Add opt-in, privacy-preserving crash diagnostics without uploading performance
+  traces by default.
+- Establish update and rollback procedures for the UI, service, analyzer,
+  scoring rules, recommendation catalog, and database.
+- Run a staged beta with the optimizer catalog more restricted than the
+  read-only analyzer.
+
+#### Exit criteria
+
+- A clean Windows installation can install, analyze, compare, safely experiment,
+  undo, recover, export, update, and uninstall LeanPlay.
+- Documentation never promises universal FPS or ping improvements.
+- Every user-visible deduction is reproducible from exported evidence.
+- Every enabled optimizer action is evidence-linked and reversible.
+- The standalone analyzer and emergency recovery path remain functional if the
+  desktop UI is unavailable.
+
+## Definition of Finished
+
+LeanPlay is considered finished for its first production release when:
+
+1. A user can describe one or more symptoms before tracing.
+2. LeanPlay collects a lightweight baseline and appropriate targeted evidence.
+3. The first report screen explains the result in plain language.
+4. Verified observations, impact, relevance, confidence, coverage, time scope,
+   and reproduction state remain distinct.
+5. Domain assessments expose every deduction and never score missing evidence
+   as healthy.
+6. The interactive timeline connects conclusions to raw timestamped evidence.
+7. Developer Mode exposes the complete supported Windows evidence inventory.
+8. Baseline and comparison runs reject invalid comparisons and show raw metric
+   changes before scores.
+9. An allowlisted recommendation can be previewed, temporarily applied,
+   measured, kept, or undone.
+10. Crashes, reboots, denied operations, and interrupted sessions cannot leave
+    an unrecoverable optimized state.
+11. The product remains external to games and anti-cheat systems.
+12. The desktop UI, command-line analyzer, service, reports, recovery tooling,
+    installer, documentation, and tests ship as one coherent product.

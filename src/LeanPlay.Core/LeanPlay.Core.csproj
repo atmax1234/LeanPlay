@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Shared domain models and crash-safe optimization engine for LeanPlay.</Description>
+  </PropertyGroup>
+</Project>

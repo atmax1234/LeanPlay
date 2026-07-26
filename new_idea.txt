@@ -1,0 +1,155 @@
+Instead of: Critical, Warning, Information. I'd introduce another level.
+VERIFIED.
+Example:
+✅ VERIFIED
+Windows exhausted UDP ephemeral ports twice during the last 7 days.
+Evidence:
+Event 4266
+Socket inventory
+Endpoint owners
+Confidence:
+99%
+
+Another one:
+Verified
+Intel I226-V link renegotiated 6 times.
+
+Another:
+Verified
+GPU never exceeded 3% during idle trace.
+
+That wording psychologically feels different. It tells people: "We observed this." not "We think this."
+
+I also think confidence deserves to become a first-class citizen.
+Imagine this:
+Networking
+62/100
+Confidence
+██████████ 97%
+Measured:
+✓ Packet loss
+✓ ICMP
+✓ TCP events
+✓ UDP events
+✓ Adapter state
+
+Missing:
+✗ ETW driver trace
+
+Instead of Confidence: 97% Show WHY.
+
+You know how every doctor asks "What hurts?" LeanPlay should do exactly the same.
+Before the trace starts.
+What are you experiencing?
+( ) FPS drops
+( ) Stuttering
+( ) High ping
+( ) Packet loss
+( ) Slow Windows
+( ) Audio crackle
+( ) Mouse delay
+( ) Random freezes
+( ) Boot takes forever
+( ) SSD feels slow
+( ) Games crash
+( ) Other
+( ) Not Sure
+
+Now the analyzer changes. If I say
+High Ping
+It suddenly enables
+✓ NDIS inventory
+✓ WFP filters
+✓ Adapter power
+✓ Socket exhaustion
+✓ DNS timing
+✓ MTU
+✓ Route quality
+✓ Interrupt moderation
+✓ Network ETW
+instead of wasting time collecting printer information.
+
+Then after it finished, instead of Critical Evidence Found I'd display something like:
+Diagnosis
+We found three conditions that could explain your reported symptom.
+Probability:
+🟢 High
+Network reliability issues were observed.
+Evidence:
+✓ UDP exhaustion
+✓ Intel disconnects
+✓ VBS active (informational only)
+✓ No packet loss during trace
+✓ Stable CPU
+✓ Stable GPU
+
+Another thing I LOVE The timeline. But I'd make it interactive. Imagine clicking CPU and suddenly every event lines up.
+0.2 s
+CPU spike
+↓
+Chrome opened socket
+↓
+Interrupt latency
+↓
+Ping spike
+↓
+Discord overlay loaded
+
+My favorite future feature "Before / After Comparison" You mentioned it yourself. That should become one of LeanPlay's signature features. Example:
+Baseline
+↓
+Apply:
+Disable EEE
+↓
+Reboot
+↓
+Run again
+↓
+LeanPlay
+Result
+Network Score
+62
+↓
+89
+Latency
+17.4 ms
+↓
+12.8 ms
+Interrupts
+↓
+27%
+UDP errors
+↓
+0
+Recommendation
+KEEP CHANGE
+or
+No measurable improvement.
+Undo recommended.
+[Undo]
+
+I'd also add a "Developer Mode".
+Normal users see:
+Networking
+62/100
+Reason
+UDP exhaustion detected.
+Click Advanced:
+Boom.
+Everything.
+ETW timeline
+WFP providers
+NDIS bindings
+Registry values
+Driver versions
+Event IDs
+Power settings
+MSI/MSI-X state
+RSS queues
+Interrupt affinities
+Offloads
+TCP globals
+Socket statistics
+Basically the report you're already building.
+
+
