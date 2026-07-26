@@ -10,6 +10,8 @@ public sealed class EtwCollector : IAsyncDisposable
 {
     private readonly bool _requested;
     private readonly List<CollectorNotice> _notices;
+    private readonly Func<bool> _administratorCheck;
+    private readonly Action? _sessionStarterOverride;
     private readonly Dictionary<int, MutableProcessTotals> _processTotals = new();
     private readonly Dictionary<(ulong Routine, bool IsDpc), MutableRoutineTotals>
         _routineTotals = new();
@@ -27,9 +29,20 @@ public sealed class EtwCollector : IAsyncDisposable
     private double? _maximumIsrMicroseconds;
 
     public EtwCollector(bool requested, List<CollectorNotice> notices)
+        : this(requested, notices, IsAdministrator, null)
+    {
+    }
+
+    internal EtwCollector(
+        bool requested,
+        List<CollectorNotice> notices,
+        Func<bool> administratorCheck,
+        Action? sessionStarterOverride)
     {
         _requested = requested;
         _notices = notices;
+        _administratorCheck = administratorCheck;
+        _sessionStarterOverride = sessionStarterOverride;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -41,7 +54,7 @@ public sealed class EtwCollector : IAsyncDisposable
             return Task.CompletedTask;
         }
 
-        if (!IsAdministrator())
+        if (!_administratorCheck())
         {
             _unavailableReason =
                 "Kernel ETW requires an elevated analyzer. The standard-user fallback " +
@@ -53,42 +66,16 @@ public sealed class EtwCollector : IAsyncDisposable
 
         try
         {
-            _session = new TraceEventSession(
-                $"LeanPlayAnalyzer-{Environment.ProcessId}-{Guid.NewGuid():N}")
+            if (_sessionStarterOverride is null)
             {
-                StopOnDispose = true
-            };
-
-            var kernel = _session.Source.Kernel;
-            kernel.DiskIORead += data => AddDisk(data.ProcessID, data.TransferSize, read: true);
-            kernel.DiskIOWrite += data => AddDisk(data.ProcessID, data.TransferSize, read: false);
-            kernel.TcpIpSend += data => AddNetwork(data.ProcessID, data.size, send: true);
-            kernel.TcpIpRecv += data => AddNetwork(data.ProcessID, data.size, send: false);
-            kernel.TcpIpSendIPV6 += data => AddNetwork(data.ProcessID, data.size, send: true);
-            kernel.TcpIpRecvIPV6 += data => AddNetwork(data.ProcessID, data.size, send: false);
-            kernel.PerfInfoDPC += AddDpc;
-            kernel.PerfInfoThreadedDPC += AddDpc;
-            kernel.PerfInfoTimerDPC += AddDpc;
-            kernel.PerfInfoISR += AddIsr;
-            kernel.ImageLoad += AddImage;
-            kernel.ImageDCStart += AddImage;
-
-            var keywords =
-                KernelTraceEventParser.Keywords.Process |
-                KernelTraceEventParser.Keywords.ImageLoad |
-                KernelTraceEventParser.Keywords.DiskIO |
-                KernelTraceEventParser.Keywords.DiskFileIO |
-                KernelTraceEventParser.Keywords.NetworkTCPIP |
-                KernelTraceEventParser.Keywords.Interrupt;
-            _session.EnableKernelProvider(keywords);
-            _processingTask = Task.Run(
-                () => _session.Source.Process(),
-                CancellationToken.None);
+                StartTraceSession();
+            }
+            else
+            {
+                _sessionStarterOverride();
+            }
         }
-        catch (Exception exception) when (
-            exception is UnauthorizedAccessException
-                or InvalidOperationException
-                or System.Runtime.InteropServices.COMException)
+        catch (Exception exception)
         {
             _unavailableReason = exception.Message;
             _notices.Add(
@@ -96,11 +83,20 @@ public sealed class EtwCollector : IAsyncDisposable
                     "Kernel ETW",
                     "warning",
                     $"Kernel ETW could not start: {exception.Message}"));
-            _session?.Dispose();
+            DisposeSessionSafely();
             _session = null;
+            _processingTask = null;
         }
 
         return Task.CompletedTask;
+    }
+
+    internal static void EnableKernelBeforeAccessingSource(
+        Action enableKernelProvider,
+        Action configureAndProcessSource)
+    {
+        enableKernelProvider();
+        configureAndProcessSource();
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -120,11 +116,10 @@ public sealed class EtwCollector : IAsyncDisposable
                     .ConfigureAwait(false);
             }
         }
-        catch (Exception exception) when (
-            exception is TimeoutException
-                or InvalidOperationException
-                or OperationCanceledException)
+        catch (Exception exception)
         {
+            _unavailableReason ??=
+                $"Kernel ETW collection ended unexpectedly: {exception.Message}";
             _notices.Add(
                 new CollectorNotice(
                     "Kernel ETW",
@@ -133,7 +128,7 @@ public sealed class EtwCollector : IAsyncDisposable
         }
         finally
         {
-            _session.Dispose();
+            DisposeSessionSafely();
             _session = null;
         }
     }
@@ -190,6 +185,54 @@ public sealed class EtwCollector : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private void StartTraceSession()
+    {
+        _session = new TraceEventSession(
+            $"LeanPlayAnalyzer-{Environment.ProcessId}-{Guid.NewGuid():N}")
+        {
+            StopOnDispose = true
+        };
+
+        var keywords =
+            KernelTraceEventParser.Keywords.Process |
+            KernelTraceEventParser.Keywords.ImageLoad |
+            KernelTraceEventParser.Keywords.DiskIO |
+            KernelTraceEventParser.Keywords.DiskFileIO |
+            KernelTraceEventParser.Keywords.NetworkTCPIP |
+            KernelTraceEventParser.Keywords.Interrupt;
+
+        // TraceEvent 3.2.5 starts a real-time session when Source is first
+        // accessed. The kernel provider must be enabled before that happens.
+        EnableKernelBeforeAccessingSource(
+            () => _session.EnableKernelProvider(keywords),
+            () =>
+            {
+                var kernel = _session.Source.Kernel;
+                kernel.DiskIORead +=
+                    data => AddDisk(data.ProcessID, data.TransferSize, read: true);
+                kernel.DiskIOWrite +=
+                    data => AddDisk(data.ProcessID, data.TransferSize, read: false);
+                kernel.TcpIpSend +=
+                    data => AddNetwork(data.ProcessID, data.size, send: true);
+                kernel.TcpIpRecv +=
+                    data => AddNetwork(data.ProcessID, data.size, send: false);
+                kernel.TcpIpSendIPV6 +=
+                    data => AddNetwork(data.ProcessID, data.size, send: true);
+                kernel.TcpIpRecvIPV6 +=
+                    data => AddNetwork(data.ProcessID, data.size, send: false);
+                kernel.PerfInfoDPC += AddDpc;
+                kernel.PerfInfoThreadedDPC += AddDpc;
+                kernel.PerfInfoTimerDPC += AddDpc;
+                kernel.PerfInfoISR += AddIsr;
+                kernel.ImageLoad += AddImage;
+                kernel.ImageDCStart += AddImage;
+
+                _processingTask = Task.Run(
+                    () => _session.Source.Process(),
+                    CancellationToken.None);
+            });
     }
 
     private void AddDisk(int processId, int size, bool read)
@@ -302,6 +345,27 @@ public sealed class EtwCollector : IAsyncDisposable
     {
         using var identity = WindowsIdentity.GetCurrent();
         return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+    }
+
+    private void DisposeSessionSafely()
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _session.Dispose();
+        }
+        catch (Exception exception)
+        {
+            _notices.Add(
+                new CollectorNotice(
+                    "Kernel ETW",
+                    "warning",
+                    $"Kernel ETW cleanup was incomplete: {exception.Message}"));
+        }
     }
 
     private sealed class MutableProcessTotals

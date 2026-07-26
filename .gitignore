@@ -10,3 +10,5 @@ data/*.db-wal
 *.suo
 recovery-journal.json
 recovery-journal.json.*.tmp
+new_idea.txt
+planning.txt
